@@ -137,7 +137,7 @@ class YoloDetectionNode(Node):
                 ymax=int(detection.ymax * frame.shape[0])
 
                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                cv2.putText(frame, label_name, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(frame, label_name, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
 
 
                 self.detection_publisher.publish(detection_msg)
