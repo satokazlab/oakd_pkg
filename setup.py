@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'oakd_pkg'
 
@@ -10,6 +12,12 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), 
+         glob('launch/*.py')),
+        (os.path.join('share', package_name, 'config'), 
+         glob('config/*.py')),
+        (os.path.join('share', package_name, 'models'), 
+         glob('models/*.py'))
     ],
     install_requires=['setuptools','depthai', 'opencv-python', 'ultralytics'],
     zip_safe=True,

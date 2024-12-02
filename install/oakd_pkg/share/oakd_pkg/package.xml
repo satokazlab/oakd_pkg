@@ -22,8 +22,6 @@
   <exec_depend>blobconverter</exec_depend>
   <exec_depend>Path</exec_depend>
   <exec_depend>CvBridge</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
-  
 
 
 

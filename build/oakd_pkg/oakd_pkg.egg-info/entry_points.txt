@@ -1,0 +1,4 @@
+[console_scripts]
+image_topic_test = oakd_pkg.image_topic_test:main
+yolo_detection = oakd_pkg.yolo_detection:main
+
