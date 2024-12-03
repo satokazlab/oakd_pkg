@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import sys
 import cv2
 import depthai as dai
@@ -8,7 +6,7 @@ import time
 import json
 from pathlib import Path
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose, BoundingBox2D
-from std_msgs.msg import Header
+from std_msgs.msg import Header, Bool
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import rclpy
@@ -22,11 +20,12 @@ class YoloDetectionNode(Node):
         self.declare_parameter('model_path', '')
         self.declare_parameter('config_path', '')
 
-        # camera topic add 
-        self.bridge=CvBridge()
-        self.image_publisher=self.create_publisher(Image,'detection_image',10)
+        # カメラのトピック
+        self.bridge = CvBridge()
+        self.image_publisher = self.create_publisher(Image, 'detection_image', 10)
 
-        
+        # GREEN検出トピック
+        self.green_publisher = self.create_publisher(Bool, 'green_detection', 10)
 
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         config_path = self.get_parameter('config_path').get_parameter_value().string_value
@@ -75,19 +74,13 @@ class YoloDetectionNode(Node):
 
         # カメラ映像の出力を設定
         camRgbVideoOut = pipeline.create(dai.node.XLinkOut)
-        camRgbVideoOut.setStreamName("rgb")  # カメラ映像のストリーム名を設定
+        camRgbVideoOut.setStreamName("rgb")
         camRgb.video.link(camRgbVideoOut.input)
 
-
-        
-
         # デバイス接続とパイプライン開始
-
         self.device = dai.Device(pipeline)
         self.qDet = self.device.getOutputQueue(name="nn", maxSize=4, blocking=False)
-        # camera topic add
-        self.qVideo = self.device.getOutputQueue(name='rgb',maxSize=4,blocking=False)
-        #camRgb.video.link(self.qVideo.input)
+        self.qVideo = self.device.getOutputQueue(name='rgb', maxSize=4, blocking=False)
 
         self.detection_publisher = self.create_publisher(Detection2DArray, 'detections', 10)
         self.timer = self.create_timer(0.1, self.timer_callback)
@@ -102,17 +95,18 @@ class YoloDetectionNode(Node):
         header.stamp = self.get_clock().now().to_msg()
         header.frame_id = "camera_frame"
         detection_msg.header = header
-        # camara topic add 
-        frame=None
-        inFrame=self.qVideo.tryGet()
+
+        # カメラフレームの取得
+        frame = None
+        inFrame = self.qVideo.tryGet()
 
         if inFrame is not None:
-            frame=inFrame.getCvFrame()
-        
+            frame = inFrame.getCvFrame()
+
+        green_detected = False  # GREEN検出フラグ
+
         if frame is not None:
-            
             for detection in inDet.detections:
-                
                 detection2d = Detection2D()
                 label_id = detection.label
                 label_name = self.labels[label_id] if label_id < len(self.labels) else str(label_id)
@@ -131,26 +125,34 @@ class YoloDetectionNode(Node):
 
                 detection_msg.detections.append(detection2d)
 
-                xmin=int(detection.xmin * frame.shape[1])
-                ymin=int(detection.ymin * frame.shape[0])
-                xmax=int(detection.xmax * frame.shape[1])
-                ymax=int(detection.ymax * frame.shape[0])
+                xmin = int(detection.xmin * frame.shape[1])
+                ymin = int(detection.ymin * frame.shape[0])
+                xmax = int(detection.xmax * frame.shape[1])
+                ymax = int(detection.ymax * frame.shape[0])
 
                 cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
-                label_with_score =f"{label_name}: {detection.confidence:2f}"
-                cv2.putText(frame, label_with_score , (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
+                label_with_score = f"{label_name}: {detection.confidence:.2f}"
+                cv2.putText(frame, label_with_score, (xmin, ymin - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 0), 4)
 
+                # "GREEN"の検出を確認
+                if label_name.upper() == "GREEN":
+                    green_detected = True
 
-                self.detection_publisher.publish(detection_msg)
+            # GREEN検出の結果をパブリッシュ
+            green_msg = Bool()
+            green_msg.data = green_detected
+            self.green_publisher.publish(green_msg)
 
-            image_msg=self.bridge.cv2_to_imgmsg(frame,encoding="bgr8")
+            # カメラ画像をパブリッシュ
+            image_msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
             self.image_publisher.publish(image_msg)
 
-        self.detection_publisher.publish(detection_msg)    
+        self.detection_publisher.publish(detection_msg)
 
     def destroy_node(self):
         super().destroy_node()
         self.device.close()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -163,6 +165,7 @@ def main(args=None):
     finally:
         node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
