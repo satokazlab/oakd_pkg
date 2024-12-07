@@ -23,7 +23,6 @@ class YoloDetectionNode(Node):
         # カメラのトピック
         self.bridge = CvBridge()
         self.image_publisher = self.create_publisher(Image, 'detection_image', 10)
-
         # GREEN検出トピック
         self.green_publisher = self.create_publisher(Bool, 'green_detection', 10)
 
@@ -84,6 +83,9 @@ class YoloDetectionNode(Node):
 
         self.detection_publisher = self.create_publisher(Detection2DArray, 'detections', 10)
         self.timer = self.create_timer(0.1, self.timer_callback)
+        self.green_detection_start_time = None
+        self.green_detection_active = False
+
 
     def timer_callback(self):
         inDet = self.qDet.tryGet()
@@ -139,10 +141,19 @@ class YoloDetectionNode(Node):
                     green_detected = True
 
             # GREEN検出の結果をパブリッシュ
-            green_msg = Bool()
-            green_msg.data = green_detected
-            self.green_publisher.publish(green_msg)
-
+            if green_detected:
+                if not self.green_detection_active:
+                    if time.time() - self.green_detection_start_time > 3.0:
+                        green_msg = Bool()
+                        green_msg.data = green_detected
+                        self.green_publisher.publish(green_msg)
+                else:
+                    self.green_detection_start_time = time.time()
+                    self.green_detection_active = True
+            else:
+                self.green_detection_active = False
+                self.green_detection_start_time = None
+                
             # カメラ画像をパブリッシュ
             image_msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
             self.image_publisher.publish(image_msg)
